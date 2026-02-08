@@ -10,6 +10,7 @@ from .OmnimatteZero import OmnimatteZero
 from contextlib import contextmanager
 import sys
 from diffusers import GGUFQuantizationConfig
+from accelerate import init_empty_weights
 @contextmanager
 def temp_patch_module_attr(module_name: str, attr_name: str, new_obj):
     mod = sys.modules.get(module_name)
@@ -50,17 +51,27 @@ def  load_upsample_model(vae_path, model_path,cur_dir):
 
 
 def load_model(model_path,gguf_path,vae_path,cur_dir):
-    vae=AutoencoderKLLTXVideo.from_single_file(vae_path,config=os.path.join(cur_dir, "LTX-Video-0.9.7-diffusers/vae/config.json"), torch_dtype=torch.bfloat16)
+    vae_config=AutoencoderKLLTXVideo.load_config(os.path.join(cur_dir, "LTX-Video-0.9.7-diffusers/vae/config.json"))
+    vae=AutoencoderKLLTXVideo.from_config(vae_config,torch_dtype=torch.bfloat16)
+    vae.load_state_dict(load_file(vae_path), strict=False)
+    vae.eval().to("cuda",torch.bfloat16)
+    #vae=AutoencoderKLLTXVideo.from_single_file(vae_path,config=os.path.join(cur_dir, "LTX-Video-0.9.7-diffusers/vae/config.json"), torch_dtype=torch.bfloat16)
     with temp_patch_module_attr("diffusers", "LTXVideoTransformer3DModel", LTXVideoTransformer3DModel):
         if gguf_path is not None:
-
             transformer = LTXVideoTransformer3DModel.from_single_file(
                 gguf_path,
                 config=os.path.join(cur_dir, "LTX-Video-0.9.7-diffusers/transformer"),
                 quantization_config=GGUFQuantizationConfig(compute_dtype=torch.bfloat16),
                 torch_dtype=torch.bfloat16) 
         else:
-            transformer=LTXVideoTransformer3DModel.from_single_file(model_path,config=os.path.join(cur_dir, "LTX-Video-0.9.7-diffusers/transformer/config.json"), torch_dtype=torch.bfloat16)
+            try:
+                transformer=LTXVideoTransformer3DModel.from_single_file(model_path,config=os.path.join(cur_dir, "LTX-Video-0.9.7-diffusers/transformer/config.json"), torch_dtype=torch.bfloat16)         
+            except:
+                print("load model error,use normal load mode")
+                transformer_config=LTXVideoTransformer3DModel.load_config(os.path.join(cur_dir, "LTX-Video-0.9.7-diffusers/transformer/config.json"))
+                with init_empty_weights():
+                    transformer=LTXVideoTransformer3DModel.from_config(transformer_config,torch_dtype=torch.bfloat16)
+                transformer.load_state_dict(load_file(model_path), strict=False,assign=True)
     pipe = OmnimatteZero.from_pretrained(os.path.join(cur_dir, "LTX-Video-0.9.7-diffusers"),text_encoder=None,vae=vae,transformer=transformer, torch_dtype=torch.bfloat16,)
     pipe.vae.enable_tiling()
     return pipe
