@@ -36,7 +36,7 @@ def round_to_nearest_resolution_acceptable_by_vae(height, width):
     width = width - (width % 32)
     return height, width
 
-def  load_upsample_model(vae_path, model_path,cur_dir):
+def  load_upsample_model(vae_path, model_path,cur_dir,):
     latent_upsampler_config=LTXLatentUpsamplerModel.load_config(os.path.join(cur_dir, "LTX-Video-0.9.7-diffusers/upsampler/latent_upsampler/config.json"))
     pipe=LTXLatentUpsamplerModel.from_config(latent_upsampler_config,torch_dtype=torch.bfloat16)
     u_dict=load_file(model_path)
@@ -50,12 +50,27 @@ def  load_upsample_model(vae_path, model_path,cur_dir):
     return pipe_upsample
 
 
-def load_model(model_path,gguf_path,vae_path,cur_dir):
-    vae_config=AutoencoderKLLTXVideo.load_config(os.path.join(cur_dir, "LTX-Video-0.9.7-diffusers/vae/config.json"))
-    vae=AutoencoderKLLTXVideo.from_config(vae_config,torch_dtype=torch.bfloat16)
-    vae.load_state_dict(load_file(vae_path), strict=False)
-    vae.eval().to("cuda",torch.bfloat16)
-    #vae=AutoencoderKLLTXVideo.from_single_file(vae_path,config=os.path.join(cur_dir, "LTX-Video-0.9.7-diffusers/vae/config.json"), torch_dtype=torch.bfloat16)
+def load_model(model_path,gguf_path,vae_path,cur_dir,compose_mode=False):
+    if compose_mode:
+        from .foreground_composition import MyAutoencoderKLLTXVideo
+        with temp_patch_module_attr("diffusers", "AutoencoderKLLTXVideo", MyAutoencoderKLLTXVideo):
+            try:
+                vae_config=MyAutoencoderKLLTXVideo.load_config(os.path.join(cur_dir, "LTX-Video-0.9.7-diffusers/vae/config.json"))
+                vae=MyAutoencoderKLLTXVideo.from_config(vae_config,torch_dtype=torch.bfloat16)
+                vae.load_state_dict(load_file(vae_path), strict=False)
+                vae.eval().to("cuda",torch.bfloat16)
+            except:
+                print("load vae error,use normal load mode")
+                vae=MyAutoencoderKLLTXVideo.from_single_file(vae_path,config=os.path.join(cur_dir, "LTX-Video-0.9.7-diffusers/vae/config.json"), torch_dtype=torch.bfloat16)
+    else:
+        try:
+            vae_config=AutoencoderKLLTXVideo.load_config(os.path.join(cur_dir, "LTX-Video-0.9.7-diffusers/vae/config.json"))
+            vae=AutoencoderKLLTXVideo.from_config(vae_config,torch_dtype=torch.bfloat16)
+            vae.load_state_dict(load_file(vae_path), strict=False)
+            vae.eval().to("cuda",torch.bfloat16)
+        except:
+            print("load vae error,use normal load mode")
+            vae=AutoencoderKLLTXVideo.from_single_file(vae_path,config=os.path.join(cur_dir, "LTX-Video-0.9.7-diffusers/vae/config.json"), torch_dtype=torch.bfloat16)
     with temp_patch_module_attr("diffusers", "LTXVideoTransformer3DModel", LTXVideoTransformer3DModel):
         if gguf_path is not None:
             transformer = LTXVideoTransformer3DModel.from_single_file(
