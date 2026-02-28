@@ -1,6 +1,10 @@
 # OmnimatteZero  
 [Official implementation of OmnimatteZero](https://github.com/dvirsamuel/OmnimatteZero/tree/main): Training-Free Video Matting and Compositing via Latent Diffusion Models
 
+# Update 2 
+
+This forked repo was made to allow CPU mode when running out of vram.
+
 # Update
 * add compose mode，but  got a normal effect.. 
 * Test Vram 12G,Ram 64,  video 1280x720 5s ,if lower Vram, keep 'block_number' <10 and >0, if  'block_number'=0 ,will run in full mode;
